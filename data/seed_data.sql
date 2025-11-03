@@ -1,0 +1,16 @@
+-- Crear tabla de ventas
+DROP TABLE IF EXISTS ventas;
+
+CREATE TABLE ventas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    producto TEXT NOT NULL,
+    categoria TEXT NOT NULL,
+    precio REAL NOT NULL,
+    pais TEXT NOT NULL,
+    fecha_venta TEXT NOT NULL
+);
+
+-- Insertar datos iniciales
+INSERT INTO ventas (producto, categoria, precio, pais, fecha_venta) VALUES
+('iPhone 14', 'smartphones', 1300, 'Argentina', '2024-05-10'),
+('MacBook Air', 'notebooks', 1800, 'Chile', '2024-05-12');
