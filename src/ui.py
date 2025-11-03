@@ -1,19 +1,19 @@
 import gradio as gr
-from src.main import handle_query
+from src.agent import process_query_with_mcp
 
 def process_query(db_mode, upload_db_file, context_prompt, model_choice, access_key, secret_key, question):
     """Process the query and return a response."""
     try:
         # Determina la ruta de la base de datos según el modo seleccionado
         if db_mode == "Usar base de datos de prueba":
-            db_path = "data/demo.db"
+            db_path = "data/test_database.db"
         elif db_mode == "Cargar base de datos nueva" and upload_db_file:
             db_path = upload_db_file.name
         else:
-            # Fallback a demo si no hay archivo subido o modo no reconocido
-            db_path = "data/demo.db"
+            # Fallback a test_database si no hay archivo subido o modo no reconocido
+            db_path = "data/test_database.db"
 
-        result = handle_query(model_choice, db_path, context_prompt, question, access_key, secret_key)
+        result = process_query_with_mcp(question, model_choice, db_path, context_prompt, access_key, secret_key)
         if isinstance(result, dict):
             return result.get("sql_query", ""), result.get("response", "")
         else:
@@ -59,7 +59,7 @@ def create_ui():
                 gr.Markdown("### Prompt de Contexto")
                 context_prompt = gr.Textbox(
                     label="Contexto de la empresa por defecto. Puedes modificar este Prompts",
-                    value='La empresa "TechNova" vende productos electrónicos. Tiene un promedio de 5.000 ventas mensuales en Latinoamérica. Sus categorías principales son smartphones, notebooks y accesorios.',
+                    value='Esta es una base de datos de e-commerce con categorías (Electrónicos, Ropa, Hogar), usuarios registrados, productos en inventario y pedidos realizados por los usuarios.',
                     lines=3
                 )
                 
@@ -90,11 +90,12 @@ def create_ui():
                 
                 submit_btn = gr.Button("Enviar", variant="primary")
                 
-                gr.Markdown("### Consulta SQL Generada por el modelo:")
+                gr.Markdown("### Información Técnica")
                 sql_query = gr.Textbox(
-                    label="SQL Query",
+                    label="Herramientas MCP utilizadas",
                     lines=3,
-                    interactive=False
+                    interactive=False,
+                    placeholder="El agente MCP utiliza herramientas automáticamente para acceder a la base de datos..."
                 )
                 
                 gr.Markdown("### Respuesta")

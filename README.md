@@ -1,276 +1,275 @@
-# Text-to-SQL Agent
+# Text-to-SQL Agent con MCP y Bedrock Converse API
 
 ¡Hola! 👋 
 
-Esta es la solución para la prueba técnica. Te voy a explicar qué hace, cómo lo construí y cómo puedes correrlo tú mismo.
+Esta es la solución de agente conversacional que convierte preguntas en lenguaje natural en consultas SQL. La solución usa **MCP (Model Context Protocol)** directamente con **AWS Bedrock Converse API** para que el agente decida automáticamente qué herramientas necesita para responder.
 
-## ¿Qué hace este proyecto?
+## ¿Qué hace esta solución?
 
-Es un agente conversacional que convierte preguntas en lenguaje natural (como "¿Cuál fue el precio promedio de venta en Chile?") en consultas SQL y las ejecuta. Lo interesante es que puede responder de dos formas:
+Es un agente conversacional inteligente que convierte preguntas en lenguaje natural (como "¿Cuántos usuarios hay registrados?") en consultas SQL y las ejecuta. Puede responder de dos formas:
 
-1. **Usando contexto**: Si la pregunta puede responderse con la información general que proporcionas sobre tu empresa, lo hace directamente sin tocar la base de datos.
-2. **Consultando la base de datos**: Si necesita datos específicos, genera una consulta SQL automáticamente, la ejecuta e interpreta los resultados para darte una respuesta en lenguaje natural.
+1. **Usando contexto**: Si la pregunta puede responderse con información general sobre la empresa, lo hace directamente sin consultar la base de datos.
+2. **Consultando la base de datos**: Si necesita datos específicos, el agente genera automáticamente una consulta SQL, la ejecuta e interpreta los resultados para darte una respuesta en lenguaje natural.
 
-Todo esto usando modelos de IA de AWS Bedrock: Claude y Llama a través de LangChain.
+Todo esto usando modelos LLM de AWS Bedrock a través de **Bedrock Converse API** directamente. Implementé **MCP (Model Context Protocol)** usando el paquete oficial `mcp` de Python, con un servidor MCP usando FastMCP que expone las herramientas, y un cliente MCP personalizado que se conecta al servidor y usa las herramientas con Bedrock Converse API.
 
-## ¿Cómo lo hice? (Arquitectura)
+## ¿Cómo funciona?
 
-Decidí usar un **modelo directo y simplificado**. La razón es que quería algo que funcionara rápido sin complicaciones, simplemente LangChain conectándose directamente a AWS Bedrock y mostrando el resultado en gradio.
+La arquitectura es simple pero potente. El LLM (en Bedrock) decide automáticamente qué herramienta usar según la pregunta:
 
-**¿Por qué esta arquitectura?**
-- Es más simple de entender y mantener
-- Menos latencia (comunicación directa con Bedrock)
-- Configuración rápida sin necesidad de servidores adicionales
-- Perfecta para prototipos y pruebas
+- Si es sobre información general → usa `get_context()`
+- Si necesita datos específicos → usa `get_database_schema_tool()` y luego `execute_sql()`
 
-Si quieres más detalles técnicos, los dejo más abajo en la sección de Arquitectura.
+**Arquitectura MCP:**
+- ✅ **Servidor MCP oficial**: Uso `FastMCP` de la biblioteca `mcp` (`src/mcp/server.py`) que expone las herramientas usando el protocolo MCP estándar
+- ✅ **Cliente MCP personalizado**: Uso `ClientSession` y `stdio_client` del paquete `mcp` (`src/mcp/client.py`) para conectarse al servidor MCP
+- ✅ **Herramientas a través de MCP**: Las herramientas se obtienen y ejecutan a través del protocolo MCP estándar usando transporte stdio
+- ✅ **Bedrock Converse API**: Uso `boto3` directamente para llamar a Bedrock Converse API con las herramientas MCP
+- ✅ **Ciclo conversacional**: Bedrock puede usar herramientas múltiples veces en un ciclo conversacional hasta obtener la respuesta
+
+**¿Por qué este enfoque?**
+- Más simple: sin SDKs adicionales innecesarios
+- El agente decide automáticamente qué herramientas necesita
+- Flexible y escalable: fácil agregar nuevas herramientas
+- Separación clara de responsabilidades
+- Usa bibliotecas oficiales (paquete `mcp` de Python)
 
 ## Estructura del proyecto
-Si quieres entender cómo está organizado el código, aquí te explico:
 
-### Archivos:
+Aquí tienes cómo está organizado el código:
 
-- **`src/main.py`**: El cerebro del agente. Aquí está:
-  - La carga de los modelos LLM desde Bedrock
-  - La lógica que decide si usar contexto o SQL
-  - La generación de SQL desde lenguaje natural
-  - La interpretación de resultados
-  - El orquestador que coordina todo el flujo
+### Archivos principales:
 
-- **`src/database.py`**: Todo lo relacionado con bases de datos:
-  - Conectarse a SQLite
-  - Extraer el esquema de las tablas
-  - Formatear el esquema para los prompts
-  - Ejecutar queries
-
-- **`src/api.py`**: La API REST con FastAPI. Incluye endpoints para hacer queries.
-
-- **`src/ui.py`**: La interfaz web de Gradio. Aquí está toda la UI de la aplicación.
+- **`main.py`**: Punto de entrada simple que lanza la interfaz
+- **`src/agent.py`**: El agente principal que orquesta todo usando MCP y Bedrock Converse API
+- **`src/mcp/server.py`**: Servidor MCP usando FastMCP (biblioteca oficial `mcp`) que expone las herramientas a través del protocolo MCP estándar con transporte stdio
+- **`src/mcp/client.py`**: Cliente MCP personalizado que usa `ClientSession` y `stdio_client` del paquete `mcp`
+- **`src/mcp/factory.py`**: Factory para crear parámetros del servidor MCP
+- **`src/database.py`**: Funciones para conectar y manejar SQLite
+- **`src/ui.py`**: La interfaz web con Gradio
 
 ### Directorio `data/`
 
-- **`seed_data.sql`**: El script SQL con el esquema y datos de ejemplo
-- **`demo.db`**: La base de datos que se creada.
+- **`test_database.db`**: Base de datos de prueba con datos de ejemplo
+- **`test_database.sql`**: Script SQL para recrear la base de datos
 
-## Lo que necesitas antes de empezar
+## Configuración e instalación
 
-- Python 3.10 o superior (puedes verificar tu versión con `python --version`)
-- Las credenciales de AWS que te envié por correo (Access Key y Secret Access Key)
+### Requisitos previos
 
-> **Nota rápida sobre las credenciales**: Sé que pasar credenciales por correo no es la práctica más segura del mundo, pero para esta prueba lo hice así para que puedas empezar a probar inmediatamente sin tener que configurar IAM roles o perfiles de AWS. En producción usaría variables de entorno o IAM roles. ¡Pero para probar esto funciona perfecto :D !
+- Python 3.10 o superior
+- Cuenta de AWS con acceso a Bedrock
+- Credenciales AWS (Access Key y Secret Key)
+- Acceso a modelos de Bedrock (Claude 3 Sonnet, Claude 3 Haiku, o Llama 3 70B)
 
-## Cómo correr el proyecto
+### Instalación
 
-Te explico cómo lo pongo en marcha. Es bastante simple:
-
-### 1. Navega a la carpeta del proyecto  luego de clonar el repositorio
-
+1. **Clona este repositorio** (asegúrate de estar en la rama correcta):
 ```bash
+git clone <repo-url>
 cd Text-to-SQL-Agent
+git checkout <rama-actual>  # Por ejemplo: git checkout 2-mcp_text_to_SQL
 ```
 
-### 2. Crea un entorno virtual
-
+2. **Crea un entorno virtual** (recomendado):
 ```bash
-# En macOS/Linux
-python3 -m venv venv
-
-# En Windows
 python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
 ```
 
-### 3. Activa el entorno virtual
-
+3. **Instala las dependencias**:
 ```bash
-# En macOS/Linux
-source venv/bin/activate
-
-# En Windows
-venv\Scripts\activate
-```
-
-Verás `(venv)` aparecer en tu terminal - eso significa que está activo ✅
-
-### 4. Instala las dependencias
-
-```bash
-pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Esto instalará todas las librerías que necesita el proyecto (LangChain, Gradio, FastAPI, boto3, etc.)
+Esto instalará:
+- `gradio`: Para la interfaz web
+- `mcp`: Biblioteca oficial de Python para MCP (Model Context Protocol)
+- `boto3`: SDK oficial de AWS para Python
+- `python-dotenv`: Para variables de entorno (opcional)
 
-### 5. ¡Ejecuta la aplicación!
+4. **Prepara la base de datos de prueba** (opcional):
+```bash
+# Si necesitas recrear la base de datos
+sqlite3 data/test_database.db < data/test_database.sql
+```
+
+### Configuración de AWS
+
+Para facilitar la reproducción del experimento, las credenciales AWS (Access Key y Secret Key) se entregaron por correo. **⚠️ Nota importante**: Usar credenciales directamente en la interfaz no es una buena práctica de seguridad y solo se hace aquí para simplificar la reproducción del experimento. En un entorno de producción, deberías usar:
+
+- Variables de entorno
+- Roles IAM con permisos mínimos
+- Secrets Manager de AWS
+- Credenciales temporales con AWS STS
+
+**Para este experimento, debes ingresar las credenciales manualmente en la interfaz de Gradio:**
+- Las credenciales se ingresan directamente en los campos de la interfaz de Gradio
+- **Las credenciales tienen una validez de 48 horas** desde el momento en que se entregaron
+- Las credenciales no se guardan permanentemente en la aplicación (solo se usan durante la sesión)
+
+> **💡 Por qué esta decisión**: Aunque no es la mejor práctica, ingresar credenciales en la UI permite reproducir el experimento de forma rápida sin configurar variables de entorno, lo cual es útil para demos y pruebas. Sin embargo, en producción siempre debes usar métodos más seguros.
+
+## Uso
+
+### Iniciar la aplicación
 
 ```bash
 python main.py
 ```
 
-Se abrirá automáticamente en tu navegador en `http://localhost:7860`. Si no se abre solo, copia esa URL y pégalo en tu navegador.
+Esto abrirá una interfaz web de Gradio en tu navegador (por defecto en `http://localhost:7860`).
 
-### 7. Ingresa las credenciales AWS
+### Usar la interfaz
 
-Cuando la aplicación esté corriendo, verás campos para ingresar las credenciales que te envié por correo. Simplemente cópialas y pégalas ahí.
+1. **Configura la base de datos**:
+   - Selecciona "Usar base de datos de prueba" para usar la base de datos de ejemplo
+   - O "Cargar base de datos nueva" para usar tu propia base SQLite
 
-> 💡 **Tip**: Las credenciales solo se usan durante la sesión y no se guardan permanentemente. Si cierras la aplicación, tendrás que ingresarlas de nuevo y solo tienen una duración de 48 horas.
+2. **Configura el contexto** (opcional):
+   - Modifica el prompt de contexto si quieres cambiar la información general sobre la empresa
+   - Por defecto incluye información sobre la base de datos de e-commerce
 
----
+3. **Selecciona el modelo**:
+   - Elige entre Claude 3 Sonnet, Claude 3 Haiku, o Llama 3 70B
+   - Recomendado: Claude 3 Sonnet para mejores resultados
 
-**Cuando termines de probar:**
+4. **Ingresa tus credenciales AWS**:
+   - Access Key y Secret Access Key (las recibiste por correo)
+   - ⚠️ **Nota de seguridad**: Estas credenciales tienen una validez de 48 horas y solo se usan durante la sesión (no se guardan). En producción usarías métodos más seguros como variables de entorno o roles IAM.
+   - Asegúrate de tener permisos para usar Bedrock
 
-Para desactivar el entorno virtual simplemente escribe:
+5. **Haz una pregunta**:
+   - Escribe tu pregunta en lenguaje natural
+   - El agente decidirá automáticamente si usar contexto o consultar la base de datos
 
-```bash
-deactivate
-```
+### Ejemplos de preguntas
 
-## Cómo usar la interfaz
+Aquí tienes algunas preguntas que puedes probar:
 
-Una vez que la aplicación esté corriendo, la interfaz es súper intuitiva. Te explico qué hace cada cosa:
+**Preguntas sobre información general:**
+- "¿Qué tipo de empresa es esta?"
+- "¿Qué hace esta empresa?"
+- "¿Cuál es el negocio de esta empresa?"
 
-1. **Base de datos**: Por defecto usa la demo que creamos (`data/demo.db`), pero puedes cargar tu propia base SQLite si quieres.
+**Preguntas sobre datos específicos:**
+- "¿Cuántos usuarios hay registrados?"
+- "¿Cuántos pedidos hay en total?"
+- "¿Qué productos están en la categoría de Electrónicos?"
+- "¿Cuál es el producto más caro?"
+- "Muéstrame todos los pedidos completados"
+- "¿Qué usuarios han hecho pedidos?"
+- "¿Cuántos pedidos tiene el usuario con ID 1?"
 
-2. **Contexto de la empresa**: Este es el "conocimiento general" que le das al agente. Por ejemplo, si escribes "Mi empresa vende productos electrónicos y tiene 5000 ventas mensuales", el agente puede responder preguntas sobre esto sin tocar la base de datos.
+## Detalles técnicos (si te interesa cómo funciona)
 
-3. **Modelo LLM**: Puedes elegir entre Claude 3 Sonnet, Claude 3 Haiku o Llama 3 70B. Recomiendo empezar con "Claude 3 Haiku" porque es rápido y eficiente.
+### Arquitectura: MCP con Bedrock Converse API
 
-4. **Credenciales AWS**: Aquí pegas las credenciales que te envié por correo.
-
-5. **Haz tu pregunta**: Escribe lo que quieras saber en lenguaje natural, como si le hablaras a un compañero.
-
-6. **Click en "Enviar"** y espera la magia ✨
-
-### Ejemplos de preguntas que puedes hacer
-
-**Pregunta que usa contexto:**
-- Tú: "¿Cuántos productos principales vende TechNova?"
-- El agente: Detecta que puede responder con el contexto y te dice directamente: "TechNova se enfoca en tres categorías principales: smartphones, notebooks y accesorios."
-
-**Pregunta que consulta la base de datos:**
-- Tú: "¿Cuál fue el precio promedio de venta en Chile?"
-- El agente: 
-  - Genera este SQL: `SELECT AVG(precio) FROM ventas WHERE pais = 'Chile';`
-  - Lo ejecuta en la base de datos
-  - Te responde: "El precio promedio de venta en Chile fue de 1800 USD."
-
-**Más ideas para probar:**
-- "¿Cuántas ventas de smartphones hubo en mayo?"
-- "¿Qué países tienen ventas registradas?"
-- "¿Cuál es el producto más caro vendido?"
-- "Muéstrame las ventas de notebooks en Argentina"
-
-### También hay una API REST (opcional)
-
-Si prefieres consumir el agente como API en lugar de usar la interfaz web, también incluí una API REST con FastAPI. Para correrla:
-
-```bash
-uvicorn src.api:app --reload --port 8000
-```
-
-Estará disponible en `http://localhost:8000`.
-
-**Endpoints que puedes usar:**
-
-- `POST /query`: Para hacer preguntas
-  ```json
-  {
-    "use_default_db": true,
-    "db_path": "data/demo.db",
-    "context": "La empresa TechNova vende productos electrónicos...",
-    "model_name": "Claude 3 Haiku",
-    "question": "¿Cuál es el promedio de ventas?"
-  }
-  ```
-
-- `GET /health`: Para verificar que el servicio esté funcionando
-
-## Modelos Disponibles
-
-- **Claude 3 Sonnet**: Modelo balanceado de Anthropic
-- **Claude 3 Haiku**: Modelo rápido y eficiente de Anthropic
-- **Llama 3 70B**: Modelo de Meta, optimizado para instrucciones
-
-## Detalles técnicos (si te interesa cómo lo construí)
-
-### Arquitectura: Modelo Directo y Simplificado
-
-Como te comenté arriba, elegí una arquitectura directa sin complicaciones. Aquí te explico los detalles:
+La solución implementa MCP usando el paquete oficial `mcp` de Python y Bedrock Converse API directamente con boto3. Aquí te explico la arquitectura completa:
 
 **Componentes principales:**
-- **Conexión directa**: LangChain habla directamente con AWS Bedrock, sin servidores intermedios ni MCP
-- **Chain Pattern**: Uso las "cadenas" de LangChain para orquestar el flujo
-- **Separación de responsabilidades**: Cada módulo hace una cosa bien (UI, API, lógica, base de datos)
+- **Servidor MCP oficial** (`src/mcp/server.py`): Usa `FastMCP` de la biblioteca oficial `mcp` para exponer herramientas con transporte stdio
+- **Cliente MCP personalizado** (`src/mcp/client.py`): Usa `ClientSession` y `stdio_client` del paquete `mcp` - se conecta al servidor MCP para obtener herramientas
+- **Factory MCP** (`src/mcp/factory.py`): Crea parámetros del servidor MCP con PYTHONPATH configurado para que el subproceso pueda encontrar los módulos
+- **Herramientas MCP**: Definidas con `@mcp.tool()` decorator y se obtienen a través del protocolo MCP estándar
+- **Bedrock Converse API**: Llamado directamente con `boto3` - convierte herramientas MCP al formato Bedrock y maneja el ciclo conversacional
+- **Conexión a Bedrock**: Directa a través de `boto3.client('bedrock-runtime')` - las herramientas pasan por MCP, y Bedrock Converse API gestiona la orquestación
+
+**Nota**: Uso el paquete oficial `mcp` de Python. El servidor MCP usa FastMCP con transporte stdio (simple y local). El cliente usa `ClientSession` y `stdio_client` del mismo paquete. Bedrock Converse API se llama directamente con boto3 sin SDKs adicionales.
 
 ### ¿Cómo funciona internamente?
 
-El agente toma decisiones en dos pasos:
+El agente funciona así:
 
-**Paso 1: ¿Puedo responder con contexto?**
-- Analiza tu pregunta y el contexto que proporcionaste
-- Si encuentra la respuesta ahí, te responde directamente (rápido y eficiente)
-
-**Paso 2: Necesito consultar la base de datos**
-Si no puede responder con contexto:
-1. Extrae el esquema de tu base de datos
-2. Le pide al LLM que genere una consulta SQL válida basándose en tu pregunta
-3. Ejecuta esa consulta en la base de datos
-4. Interpreta los resultados y te da una respuesta en lenguaje natural
+1. **Recibe la pregunta** del usuario
+2. **Servidor MCP**: Se inicia un servidor MCP usando FastMCP (biblioteca oficial `mcp`) con transporte stdio
+3. **Cliente MCP**: El agente crea un `MCPClient` personalizado usando `ClientSession` y `stdio_client` del paquete `mcp`, conectado al servidor
+4. **Obtiene herramientas MCP**: El cliente obtiene las herramientas del servidor a través del protocolo MCP
+5. **Convierte herramientas a formato Bedrock**: Las herramientas MCP se convierten al formato que espera Bedrock Converse API
+6. **Ciclo conversacional con Bedrock**: 
+   - Se llama a Bedrock Converse API con la pregunta y herramientas
+   - Bedrock decide qué herramienta usar
+   - Si quiere usar una herramienta → se ejecuta a través del cliente MCP
+   - Los resultados vuelven a Bedrock
+   - Bedrock puede usar otra herramienta o dar la respuesta final
+   - Este ciclo se repite hasta obtener la respuesta final
+7. **Interpreta resultados** y da una respuesta en lenguaje natural
 
 ### ¿Por qué esta arquitectura?
 
-- ✅ **Simple**: No necesitas entender MCP ni configurar servidores extra
-- ✅ **Rápida**: Menos latencia = respuestas más inmediatas
-- ✅ **Fácil de mantener**: El código es claro y directo
-- ✅ **Perfecta para prototipos**: Funciona rápido sin mucha configuración
+- ✅ **Simple**: MCP básico sin SDKs adicionales innecesarios
+- ✅ **Flexible**: Fácil agregar nuevas herramientas MCP
+- ✅ **Estándar**: Usa bibliotecas oficiales (paquete `mcp` de Python)
+- ✅ **Modular**: Servidor MCP separado, fácil de mantener
+- ✅ **Escalable**: Puedes agregar múltiples servidores MCP si lo necesitas
+- ✅ **Directo**: Bedrock Converse API directamente con boto3, sin capas intermedias
 
-## Base de Datos
+## Solución de problemas
 
-La base de datos demo incluye una tabla `ventas` con los siguientes campos:
-- `id`: Identificador único
-- `producto`: Nombre del producto
-- `categoria`: Categoría del producto (smartphones, notebooks, accesorios)
-- `precio`: Precio de venta
-- `pais`: País donde se realizó la venta
-- `fecha_venta`: Fecha de la venta
-
-Puedes extender o modificar `data/seed_data.sql` para agregar más datos de prueba.
-
-## Si algo sale mal (troubleshooting)
-
-**"Modelo no soportado"**
-- Asegúrate de que el nombre del modelo coincida exactamente con las opciones del dropdown (Claude 3 Sonnet, Claude 3 Haiku, etc.)
-
-**Error de credenciales AWS**
+### Error de credenciales AWS
 - Revisa que hayas copiado bien las credenciales (a veces hay espacios extras)
-- Verifica que las credenciales que te envié sigan siendo válidas
+- Verifica que las credenciales sigan siendo válidas
+- Asegúrate de haber ingresado ambas: Access Key y Secret Key
 
-**AccessDeniedException**
-- Esto significa que las credenciales no tienen permisos para usar Bedrock. Si pasa esto, avísame y reviso los permisos en AWS.
+### AccessDeniedException
+- Esto significa que las credenciales no tienen permisos para usar Bedrock. Verifica los permisos en AWS.
 
-**Base de datos no encontrada**
-- Ejecuta de nuevo: `python create_demo_db.py`
+### Base de datos no encontrada
+- Verifica que el archivo `data/test_database.db` exista
+- Si necesitas recrearlo: `sqlite3 data/test_database.db < data/test_database.sql`
 
-**Error de conexión a la base de datos**
-- Verifica que el archivo `data/demo.db` exista
+### Error de conexión a la base de datos
+- Verifica que el archivo `data/test_database.db` exista
 - Si cargaste tu propia base de datos, asegúrate de que sea un archivo SQLite válido
 
-## Stack tecnológico que usé
+### El agente no responde correctamente
+- Verifica que las credenciales AWS estén correctas
+- Prueba con diferentes modelos (a veces Claude 3 Sonnet funciona mejor que Haiku)
+- Revisa los logs en la terminal para ver qué está pasando
+
+### Error "ModuleNotFoundError: No module named 'src'"
+- Este error ocurre cuando el servidor MCP se ejecuta como subproceso y no encuentra los módulos
+- **Solución**: El código ya está configurado para agregar PYTHONPATH automáticamente, pero si persiste:
+  - Asegúrate de ejecutar la aplicación desde el directorio raíz del proyecto
+  - Verifica que el archivo `src/mcp/factory.py` esté configurando PYTHONPATH correctamente
+
+### Error "Connection closed" o "McpError"
+- Esto puede ocurrir si el servidor MCP se cierra prematuramente
+- **Solución**: 
+  - Asegúrate de tener todas las dependencias instaladas: `pip install -r requirements.txt`
+  - Verifica que el servidor MCP pueda ejecutarse independientemente: `python src/mcp/server.py`
+  - Si el error persiste, revisa los logs en la terminal para más detalles
+
+### Error con el paquete mcp
+- Asegúrate de tener instalado: `pip install mcp>=1.0.0`
+- Verifica que tengas la versión correcta: `pip show mcp`
+- Si hay problemas, reinstala: `pip install --upgrade mcp`
+
+## Stack tecnológico
 
 Para que sepas qué tecnologías elegí y por qué:
 
 - **Python 3.10+**: Base del proyecto
-- **LangChain**: Framework que hace súper fácil trabajar con LLMs y crear cadenas de procesamiento
+- **AWS Bedrock Converse API**: API directa de AWS para conversaciones con herramientas, llamada directamente con boto3
 - **AWS Bedrock**: Servicio de AWS para acceder a modelos como Claude y Llama
 - **Gradio**: Para crear la interfaz web rápidamente (muy fácil de usar)
-- **FastAPI**: Para la API REST (rápida y moderna)
 - **SQLite**: Base de datos simple y perfecta para este tipo de demos
 - **boto3**: SDK oficial de AWS para Python
+- **MCP (Model Context Protocol)**: Protocolo estándar para conectar herramientas a LLMs
+  - **`mcp`**: Biblioteca oficial de Python para crear servidores y clientes MCP (usamos FastMCP para servidor y ClientSession/stdio_client para cliente)
 
----
+## Notas sobre la solución
 
-## Últimas palabras
+Esta solución implementa MCP (Model Context Protocol) directamente con Bedrock Converse API usando boto3. Las decisiones que tomé:
 
-Este proyecto lo hice con mucho cariño para demostrar cómo puedo trabajar con LLMs, AWS y crear herramientas útiles. Si tienes preguntas o quieres que explique algo más a fondo, ¡no dudes en preguntar! 
+1. **Implementé MCP usando el paquete oficial `mcp`**: Uso `FastMCP` para el servidor y `ClientSession`/`stdio_client` para el cliente. Esto es la forma estándar y recomendada de usar MCP en Python.
 
-¡Espero que te sea útil y puedas probarlo sin problemas! 🚀
+2. **Arquitectura MCP oficial**: Servidor FastMCP (transporte stdio) → Cliente MCP personalizado (ClientSession) → Bedrock Converse API con herramientas MCP. Las herramientas se obtienen y ejecutan a través del protocolo MCP estándar usando las bibliotecas oficiales.
 
+3. **Bedrock Converse API directamente**: No uso SDKs adicionales, llamo directamente a Bedrock Converse API con boto3. Esto simplifica la dependencia y da más control sobre el ciclo conversacional.
+
+4. **Mantuve la estructura clara**: Cada archivo tiene una responsabilidad específica (agente, servidor MCP, cliente MCP, base de datos, UI).
+
+5. **Separación MCP**: Los componentes MCP están en su propia carpeta (`src/mcp/`) para mantener el código organizado.
+
+6. **Ciclo conversacional completo**: Implementé un ciclo donde Bedrock puede usar herramientas múltiples veces hasta obtener la respuesta final.
