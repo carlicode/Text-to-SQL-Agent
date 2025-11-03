@@ -4,6 +4,10 @@
 
 Esta es la solución para la prueba técnica. Te voy a explicar el paso a paso.
 
+## Arquitectura
+
+![Arquitectura](img/arquitectura.png)
+
 ## ¿Qué hace este proyecto?
 
 Es un agente conversacional que convierte preguntas en lenguaje natural (como "¿Cuál fue el precio promedio de venta en Chile?") en consultas SQL y las ejecuta. Lo interesante es que puede responder de dos formas:
