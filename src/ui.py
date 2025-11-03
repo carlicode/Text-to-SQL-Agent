@@ -59,7 +59,7 @@ def create_ui():
                 gr.Markdown("### Prompt de Contexto")
                 context_prompt = gr.Textbox(
                     label="Contexto de la empresa por defecto. Puedes modificar este Prompts",
-                    value='Esta es una base de datos de e-commerce con categorías (Electrónicos, Ropa, Hogar), usuarios registrados, productos en inventario y pedidos realizados por los usuarios.',
+                    value='TechNova es una empresa que vende productos electrónicos. Tiene un promedio de 5,000 ventas mensuales en Latinoamérica. Sus tres categorías principales son: smartphones, notebooks y accesorios.',
                     lines=3
                 )
                 
