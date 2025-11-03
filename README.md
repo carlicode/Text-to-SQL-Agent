@@ -4,6 +4,19 @@
 
 Esta es la solución de agente conversacional que convierte preguntas en lenguaje natural en consultas SQL. La solución usa **MCP (Model Context Protocol)** directamente con **AWS Bedrock Converse API** para que el agente decida automáticamente qué herramientas necesita para responder.
 
+## Arquitectura
+
+![Arquitectura MCP](img/mcp_arquitectura.png)
+
+Esta imagen muestra cómo se integran los componentes de la solución:
+
+- **Interfaz de usuario (Gradio)**: Captura las preguntas del usuario
+- **Agente (`src/agent.py`)**: Orquesta el flujo usando MCP y Bedrock Converse API
+- **Cliente MCP (`src/mcp/client.py`)**: Se conecta al servidor MCP usando el protocolo estándar
+- **Servidor MCP (`src/mcp/server.py`)**: Expone las herramientas (get_database_schema_tool, execute_sql, get_context)
+- **Base de datos SQLite**: Almacena los datos que el agente consulta
+- **AWS Bedrock Converse API**: El LLM que decide qué herramientas usar y procesa las respuestas
+
 ## ¿Qué hace esta solución?
 
 Es un agente conversacional inteligente que convierte preguntas en lenguaje natural (como "¿Cuántos usuarios hay registrados?") en consultas SQL y las ejecuta. Puede responder de dos formas:
