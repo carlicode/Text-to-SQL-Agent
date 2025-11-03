@@ -1,14 +1,19 @@
 import gradio as gr
 from src.main import handle_query
 
-def process_query(use_default_db, upload_db_file, context_prompt, model_choice, access_key, secret_key, question):
+def process_query(db_mode, upload_db_file, context_prompt, model_choice, access_key, secret_key, question):
     """Process the query and return a response."""
     try:
-        # Determina la ruta de la base de datos
-        db_path = "data/demo.db" if use_default_db else upload_db_file.name if upload_db_file else "data/demo.db"
-        # Procesa la query usando el agente
+        # Determina la ruta de la base de datos según el modo seleccionado
+        if db_mode == "Usar base de datos de prueba":
+            db_path = "data/demo.db"
+        elif db_mode == "Cargar base de datos nueva" and upload_db_file:
+            db_path = upload_db_file.name
+        else:
+            # Fallback a demo si no hay archivo subido o modo no reconocido
+            db_path = "data/demo.db"
+
         result = handle_query(model_choice, db_path, context_prompt, question, access_key, secret_key)
-        # Si recibimos un diccionario con sql_query y response
         if isinstance(result, dict):
             return result.get("sql_query", ""), result.get("response", "")
         else:
@@ -24,13 +29,31 @@ def create_ui():
         with gr.Row():
             with gr.Column():
                 gr.Markdown("### Configuración de la Base de Datos")
-                use_default_db = gr.Checkbox(
-                    label="Usar base de datos por defecto con la tabla 'ventas' (en /data/demo.db)",
-                    value=True
+                db_mode = gr.Radio(
+                    label="Selecciona el modo de base de datos",
+                    choices=["Usar base de datos de prueba", "Cargar base de datos nueva"],
+                    value="Usar base de datos de prueba",
+                    info="Selecciona si quieres usar la base de datos de ejemplo o cargar tu propia base SQLite"
                 )
                 upload_db_file = gr.File(
-                    label="Cargar archivo SQLite (.db)",
-                    file_types=[".db", ".sqlite", ".sqlite3"]
+                    label="Cargar archivo SQLite (.db, .sqlite, .sqlite3)",
+                    file_types=[".db", ".sqlite", ".sqlite3"],
+                    visible=False  
+                )
+                
+                # Función callback: mostrar/ocultar el campo de upload según la selección
+                def on_db_mode_change(mode):
+                    """Muestra u oculta el campo de upload según el modo seleccionado"""
+                    if mode == "Cargar base de datos nueva":
+                        return gr.update(visible=True) 
+                    else:
+                        return gr.update(visible=False, value=None)  
+                
+                # Conectar el cambio de selección con la función callback
+                db_mode.change(
+                    fn=on_db_mode_change,
+                    inputs=[db_mode],
+                    outputs=[upload_db_file]
                 )
                 
                 gr.Markdown("### Prompt de Contexto")
@@ -83,7 +106,7 @@ def create_ui():
         
         submit_btn.click(
             fn=process_query,
-            inputs=[use_default_db, upload_db_file, context_prompt, model_choice, access_key, secret_key, question],
+            inputs=[db_mode, upload_db_file, context_prompt, model_choice, access_key, secret_key, question],
             outputs=[sql_query, response]
         )
     

@@ -1,6 +1,7 @@
 from langchain_aws import ChatBedrock
 from langchain_core.prompts import PromptTemplate
 from src.database import get_database_connection, get_database_schema, format_schema
+import re
 
 def get_llm_model(model_name: str, aws_access_key: str = None, aws_secret_key: str = None):
     """Carga e inicializa el modelo LLM a través de Bedrock."""
@@ -69,9 +70,66 @@ def create_sql_chain(llm, db_schema: str):
 
         Pregunta del usuario: {question}
 
-        Genera SOLO la consulta SQL válida para SQLite. No incluyas explicaciones, solo el SQL:
+        CRÍTICO: 
+        - Responde ÚNICAMENTE con la consulta SQL válida
+        - NO incluyas explicaciones, comentarios, ni texto adicional
+        - NO escribas "No puedo...", "No hay...", o cualquier frase
+        - NO uses markdown (no ```sql ```)
+        - Empieza directamente con SELECT, INSERT, UPDATE o DELETE
+        - Termina con punto y coma (;)
+
+        Ejemplo de respuesta CORRECTA:
+        SELECT COUNT(*) FROM usuarios WHERE nombre = 'Juan';
+
+        Ejemplo de respuesta INCORRECTA (NO hagas esto):
+        No puedo generar SQL sin más información.
+        ```sql
+        SELECT COUNT(*) FROM usuarios;
+        ```
+
+        Genera SOLO la consulta SQL:
         SQL:""")
     return prompt | llm
+
+def clean_sql_response(sql_response: str) -> str:
+    """Limpia la respuesta del LLM para extraer solo el SQL válido."""
+    if not sql_response:
+        return ""
+    
+    # Eliminar markdown code blocks si existen
+    sql_response = re.sub(r'```sql\s*\n?', '', sql_response)
+    sql_response = re.sub(r'```\s*\n?', '', sql_response)
+    
+    # Buscar la primera sentencia SQL (SELECT, INSERT, UPDATE, DELETE)
+    sql_match = re.search(r'(SELECT|INSERT|UPDATE|DELETE|WITH)\s+.*?;', sql_response, re.IGNORECASE | re.DOTALL)
+    if sql_match:
+        return sql_match.group(0).strip()
+    
+    # Si no encuentra con punto y coma, buscar sin punto y coma
+    sql_match = re.search(r'(SELECT|INSERT|UPDATE|DELETE|WITH)\s+.*', sql_response, re.IGNORECASE | re.DOTALL)
+    if sql_match:
+        sql = sql_match.group(0).strip()
+        # Agregar punto y coma si no tiene
+        if not sql.endswith(';'):
+            sql += ';'
+        return sql
+    
+    # Si no encuentra ninguna sentencia SQL, intentar usar toda la respuesta pero limpiarla
+    lines = sql_response.strip().split('\n')
+    # Tomar solo líneas que parecen SQL (contienen palabras clave SQL)
+    sql_lines = []
+    for line in lines:
+        line = line.strip()
+        if any(keyword in line.upper() for keyword in ['SELECT', 'FROM', 'WHERE', 'JOIN', 'INSERT', 'UPDATE', 'DELETE', 'COUNT', 'AVG', 'SUM', 'GROUP', 'ORDER', 'HAVING']):
+            sql_lines.append(line)
+    
+    if sql_lines:
+        sql = ' '.join(sql_lines)
+        if not sql.endswith(';'):
+            sql += ';'
+        return sql
+    
+    return sql_response.strip()
 
 def create_decision_chain(llm, context_prompt: str):
     """Crea una cadena para decidir si responder desde contexto o generar SQL."""
@@ -85,29 +143,32 @@ def create_decision_chain(llm, context_prompt: str):
 
         CRITERIOS PARA TU DECISIÓN:
 
-        Responde 'contexto' si:
-        - La pregunta se refiere a información general sobre la empresa (categorías de productos, promedios generales, descripciones)
-        - La respuesta está explícitamente mencionada en el contexto proporcionado
-        - La pregunta es sobre características generales que no requieren datos específicos
+        REGLA DE ORO: Si la pregunta solicita LISTAR, CONTAR, FILTRAR, ORDENAR o consultar datos específicos de registros individuales en la base de datos, SIEMPRE responde 'sql', incluso si el contexto tiene información relacionada.
 
-        Ejemplos de preguntas que usan 'contexto':
-        - "¿Cuántos productos principales vende TechNova?" → Si el contexto dice "tres categorías principales"
-        - "¿Qué tipo de productos vende la empresa?" → Si el contexto lista los tipos
-        - "¿Cuál es el promedio mensual de ventas?" → Si el contexto menciona un promedio
+        Responde 'contexto' ÚNICAMENTE si:
+        - La pregunta es SOBRE información general de la empresa (qué tipo de productos vende, descripción del negocio)
+        - La respuesta está explícitamente y completamente en el contexto
+        - La pregunta NO requiere consultar registros, filtrar, contar, o listar datos específicos
 
-        Responde 'sql' si:
-        - La pregunta requiere datos específicos de transacciones, registros individuales, o consultas complejas
-        - La pregunta pide información numérica precisa que no está en el contexto (precios específicos, fechas, cantidades exactas)
-        - La pregunta requiere agregaciones, filtros, o comparaciones de datos
-        - La pregunta menciona fechas, países, productos específicos, o requiere cálculos
+        Ejemplos que usan 'contexto':
+        - "¿Qué tipo de productos vende la empresa?" → Si el contexto lista los tipos completamente
+        - "¿Cuál es el negocio de la empresa?" → Descripción general
 
-        Ejemplos de preguntas que usan 'sql':
-        - "¿Cuál fue el precio promedio de venta en Chile?" → Requiere consultar datos específicos
-        - "¿Cuántas ventas hubo en mayo de 2024?" → Requiere contar registros específicos
-        - "¿Qué productos se vendieron en Argentina?" → Requiere consultar datos específicos
-        - "¿Cuál es el producto más caro vendido?" → Requiere consultar y comparar datos
+        Responde 'sql' SIEMPRE si la pregunta:
+        - Solicita LISTAR datos: "¿Qué países...", "¿Qué productos...", "¿En qué países...", "¿Dónde se vende...", "¿En qué país se vende..."
+        - Solicita CONTAR: "¿Cuántos...", "¿Cantidad de..."
+        - Solicita CALCULAR: "¿Cuál es el promedio...", "¿Suma de...", "¿Precio promedio..."
+        - Solicita FILTRAR: "¿Qué productos en...", "¿Ventas de...", "¿Pedidos con..."
+        - Solicita ORDENAR o comparar: "¿El más caro...", "¿Los top 3...", "¿El más vendido..."
+        - Menciona países, ciudades, fechas, productos específicos, o cualquier dato que podría estar en una tabla
 
-        Si la pregunta puede responderse parcialmente con contexto pero necesita datos para ser precisa, elige 'sql'.
+        Ejemplos que DEBEN usar 'sql':
+        - "¿En qué país se vende?" → LISTA países, usa 'sql'
+        - "¿Qué países tienen ventas?" → LISTA países, usa 'sql'
+        - "¿Cuántos productos hay?" → CUENTA registros, usa 'sql'
+        - "¿Cuál es el precio promedio?" → CALCULA, usa 'sql'
+        - "¿Qué productos se vendieron en Argentina?" → FILTRA y LISTA, usa 'sql'
+        - "¿Dónde se vende?" → LISTA ubicaciones, usa 'sql'
 
         IMPORTANTE: Responde ÚNICAMENTE con 'contexto' o 'sql' (en minúsculas), sin explicaciones adicionales.
 
@@ -119,8 +180,9 @@ def process_query_logic(question: str, context: str, db_schema: str, llm, db_con
     decision_chain = create_decision_chain(llm, context)
     decision_response = decision_chain.invoke({"question": question, "context": context})
     decision = decision_response.content.strip().lower()
-    
-    if 'contexto' in decision:
+
+    # Si dice 'sql' o cualquier otra cosa, usa SQL
+    if decision == 'contexto' or decision.startswith('contexto'):
         prompt_template = PromptTemplate.from_template(
             """Eres un asistente experto en análisis de datos empresariales. 
             Tu tarea es responder preguntas usando únicamente la información 
@@ -145,12 +207,23 @@ def process_query_logic(question: str, context: str, db_schema: str, llm, db_con
     
     sql_chain = create_sql_chain(llm, db_schema)
     sql_response = sql_chain.invoke({"question": question, "schema": db_schema})
-    sql_query = sql_response.content
+    sql_query_raw = sql_response.content
+    
+    # Limpiar y extraer SQL de la respuesta del LLM
+    sql_query = clean_sql_response(sql_query_raw)
     
     if db_connection:
         cursor = db_connection.cursor()
-        cursor.execute(sql_query)
-        results = cursor.fetchall()
+        try:
+            cursor.execute(sql_query)
+            results = cursor.fetchall()
+        except Exception as e:
+            # Si hay error SQL, retornar con el SQL generado y el error para debugging
+            error_msg = str(e)
+            return {
+                "sql_query": sql_query,
+                "response": f"Error SQL: {error_msg}\n\nSQL generado: {sql_query}\n\nNota: El modelo generó SQL inválido. Por favor, verifica la consulta o intenta reformular tu pregunta."
+            }
         
         # Obtener nombres de columnas para dar contexto a los resultados
         try:
