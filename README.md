@@ -2,7 +2,7 @@
 
 ¡Hola! 👋 
 
-Esta es la solución para la prueba técnica. Te voy a explicar qué hace, cómo lo construí y cómo puedes correrlo tú mismo.
+Esta es la solución para la prueba técnica. Te voy a explicar el paso a paso.
 
 ## ¿Qué hace este proyecto?
 
@@ -63,11 +63,22 @@ Si quieres entender cómo está organizado el código, aquí te explico:
 
 Te explico cómo lo pongo en marcha. Es bastante simple:
 
-### 1. Navega a la carpeta del proyecto  luego de clonar el repositorio
+### 1. Clona el repositorio y cambia a la rama correcta
+
+Primero, clona el repositorio:
 
 ```bash
+git clone <url-del-repositorio>
 cd Text-to-SQL-Agent
 ```
+
+**⚠️ Importante**: Asegúrate de cambiar a la rama correcta antes de continuar:
+
+```bash
+git checkout 1-simple_text_to_SQL
+```
+
+> 💡 **Tip**: Puedes verificar en qué rama estás con `git branch`.
 
 ### 2. Crea un entorno virtual
 
@@ -108,7 +119,7 @@ python main.py
 
 Se abrirá automáticamente en tu navegador en `http://localhost:7860`. Si no se abre solo, copia esa URL y pégalo en tu navegador.
 
-### 7. Ingresa las credenciales AWS
+### 6. Ingresa las credenciales AWS
 
 Cuando la aplicación esté corriendo, verás campos para ingresar las credenciales que te envié por correo. Simplemente cópialas y pégalas ahí.
 
@@ -265,12 +276,3 @@ Para que sepas qué tecnologías elegí y por qué:
 - **FastAPI**: Para la API REST (rápida y moderna)
 - **SQLite**: Base de datos simple y perfecta para este tipo de demos
 - **boto3**: SDK oficial de AWS para Python
-
----
-
-## Últimas palabras
-
-Este proyecto lo hice con mucho cariño para demostrar cómo puedo trabajar con LLMs, AWS y crear herramientas útiles. Si tienes preguntas o quieres que explique algo más a fondo, ¡no dudes en preguntar! 
-
-¡Espero que te sea útil y puedas probarlo sin problemas! 🚀
-
