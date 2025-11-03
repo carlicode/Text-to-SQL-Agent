@@ -4,6 +4,12 @@
 
 Esta es la solución para la prueba técnica. Te voy a explicar el paso a paso.
 
+## 🎥 Video Demo
+
+[![Video Demo](https://img.youtube.com/vi/90KrpApa5R4/maxresdefault.jpg)](https://www.youtube.com/watch?v=90KrpApa5R4)
+
+> **Haz clic en la imagen para ver el video demo** que muestra cómo funciona el agente en acción.
+
 ## Arquitectura
 
 ![Arquitectura](img/arquitectura.png)
