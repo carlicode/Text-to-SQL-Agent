@@ -4,6 +4,12 @@
 
 Esta es la solución de agente conversacional que convierte preguntas en lenguaje natural en consultas SQL. La solución usa **MCP (Model Context Protocol)** directamente con **AWS Bedrock Converse API** para que el agente decida automáticamente qué herramientas necesita para responder.
 
+## 🎥 Video Demo
+
+[![Video Demo](https://img.youtube.com/vi/90KrpApa5R4/maxresdefault.jpg)](https://www.youtube.com/watch?v=90KrpApa5R4)
+
+> **Haz clic en la imagen para ver el video demo** que muestra cómo funciona el agente en acción.
+
 ## Arquitectura
 
 ![Arquitectura MCP](img/mcp_arquitectura.png)
