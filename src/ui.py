@@ -4,26 +4,16 @@ import gradio as gr
 from src.agent import process_query_with_mcp
 
 DEFAULT_CONTEXT = (
-    "TechNova LATAM es una empresa B2B con sede en Latinoamérica que vende hardware (notebooks, monitores, "
-    "periféricos) y licencias SaaS. Opera también la compañía hermana NextGen Retail (SMB en Norteamérica). "
-    "Departamentos clave: Ventas Enterprise (Laura Méndez), Operaciones (Camila Rojas), Ventas SMB (Emily Johnson) "
-    "y Logística (Daniel Smith). Almacenes principales: Centro Distribución Santiago (Chile) y Hub Monterrey (México). "
-    "Órdenes tienen estados Closed Won, Negotiation y Closed Lost; pagos pueden ser parciales. Inventario registra stock "
-    "y safety stock. Tickets de soporte manejan severidad (low/medium/high/urgent) y estado. Responde en español con enfoque "
-    "ejecutivo, explicando primero conclusiones y luego detalles."
+    "La empresa \"TechNova\" vende productos electrónicos. Tiene un promedio de 5.000 ventas mensuales en "
+    "Latinoamérica. Sus categorías principales son smartphones, notebooks y accesorios."
 )
 
 
-def process_query(db_mode, upload_db_file, context_prompt, model_choice, question, selected_db_path):
+def process_query(db_mode, upload_db_file, context_prompt, model_choice, question):
     """Process the query and return a response."""
     try:
         if db_mode == "Usar base de datos de prueba":
             db_path = "data/test_database.db"
-        elif db_mode == "Usar base enterprise (demo avanzada)":
-            if selected_db_path and os.path.exists(selected_db_path):
-                db_path = selected_db_path
-            else:
-                return "", "Por favor haz clic en 'Cargar base enterprise' antes de enviar la pregunta."
         elif db_mode == "Cargar base de datos nueva" and upload_db_file:
             db_path = upload_db_file.name
         else:
@@ -40,103 +30,79 @@ def process_query(db_mode, upload_db_file, context_prompt, model_choice, questio
 def create_ui():
     def on_db_mode_change(mode: str):
         if mode == "Cargar base de datos nueva":
-            return (
-                gr.update(visible=True),
-                gr.update(visible=False),
-                gr.update(value="", visible=False)
-            )
-        if mode == "Usar base enterprise (demo avanzada)":
-            return (
-                gr.update(visible=False, value=None),
-                gr.update(visible=True),
-                gr.update(value="Haz clic en el botón para cargar la base enterprise_demo.", visible=True)
-            )
-        return (
-            gr.update(visible=False, value=None),
-            gr.update(visible=False),
-            gr.update(value="", visible=False)
-        )
-
-    def load_enterprise_database():
-        db_path = "data/enterprise_demo.db"
-        if not os.path.exists(db_path):
-            return "", gr.update(value="La base enterprise_demo.db no existe en este servidor.", visible=True)
-        return db_path, gr.update(value="Base enterprise_demo cargada ✅", visible=True)
+            return gr.update(visible=True)
+        return gr.update(visible=False, value=None)
 
     with gr.Blocks(title="Text-to-SQL Agent") as interface:
         gr.Markdown("## Text-to-SQL Agent")
         gr.Markdown(
-            "1. Selecciona la fuente de datos. 2. Ajusta (opcional) el contexto. 3. Haz tu pregunta." \
-            " Recibirás el resultado y la consulta SQL generada."
+            "Sigue tres pasos: 1) elige la fuente de datos, 2) ajusta modelo/contexto si lo necesitas, 3) formula tu pregunta."
         )
 
-        selected_db_path = gr.State("data/test_database.db")
+        gr.Markdown("### 1. Fuente de datos")
+        with gr.Row():
+            db_mode = gr.Radio(
+                choices=[
+                    "Usar base de datos de prueba",
+                    "Cargar base de datos nueva"
+                ],
+                value="Usar base de datos de prueba",
+                show_label=False,
+                scale=2
+            )
+            upload_db_file = gr.File(
+                label="Archivo SQLite (.db/.sqlite/.sqlite3)",
+                visible=False,
+                file_types=[".db", ".sqlite", ".sqlite3"],
+                scale=1
+            )
 
-        with gr.Row(equal_height=True):
-            with gr.Column(scale=1):
-                gr.Markdown("#### Fuente de datos")
-                db_mode = gr.Radio(
-                    choices=[
-                        "Usar base de datos de prueba",
-                        "Usar base enterprise (demo avanzada)",
-                        "Cargar base de datos nueva"
-                    ],
-                    value="Usar base de datos de prueba",
-                    show_label=False
-                )
-                upload_db_file = gr.File(
-                    label="Archivo SQLite (.db/.sqlite/.sqlite3)",
-                    visible=False,
-                    file_types=[".db", ".sqlite", ".sqlite3"]
-                )
-                load_demo_btn = gr.Button("Cargar base enterprise", visible=False)
-                load_status = gr.Markdown("", visible=False)
+        db_mode.change(
+            fn=on_db_mode_change,
+            inputs=[db_mode],
+            outputs=[upload_db_file]
+        )
 
-                db_mode.change(
-                    fn=on_db_mode_change,
-                    inputs=[db_mode],
-                    outputs=[upload_db_file, load_demo_btn, load_status]
-                )
+        gr.Markdown("### 2. Modelo y contexto")
+        with gr.Row():
+            model_choice = gr.Dropdown(
+                choices=["Claude 3 Sonnet", "Claude 3 Haiku", "Llama 3 70B"],
+                value="Claude 3 Haiku",
+                label="Modelo",
+                scale=1
+            )
+            context_prompt = gr.Textbox(
+                value=DEFAULT_CONTEXT,
+                lines=4,
+                label="Contexto",
+                scale=2
+            )
 
-                load_demo_btn.click(
-                    fn=load_enterprise_database,
-                    inputs=None,
-                    outputs=[selected_db_path, load_status]
-                )
+        gr.Markdown("### 3. Haz tu pregunta")
+        question = gr.Textbox(
+            placeholder="Ejemplo: ¿Cuál es el monto pendiente de las órdenes de TechNova LATAM?",
+            lines=4,
+            label="Pregunta"
+        )
+        submit_btn = gr.Button("Enviar", variant="primary")
 
-                gr.Markdown("#### Modelo")
-                model_choice = gr.Dropdown(
-                    choices=["Claude 3 Sonnet", "Claude 3 Haiku", "Llama 3 70B"],
-                    value="Claude 3 Haiku",
-                    show_label=False
-                )
-
-                with gr.Accordion("Contexto (opcional)", open=False):
-                    context_prompt = gr.Textbox(value=DEFAULT_CONTEXT, lines=8, label="")
-
-            with gr.Column(scale=2):
-                gr.Markdown("#### Pregunta")
-                question = gr.Textbox(
-                    placeholder="Ejemplo: ¿Cuál es el monto pendiente de las órdenes de TechNova LATAM?",
-                    lines=4,
-                    label=""
-                )
-                submit_btn = gr.Button("Enviar", variant="primary")
-
-                gr.Markdown("#### Respuesta")
-                response = gr.Textbox(lines=8, interactive=False, label="")
-
-                gr.Markdown("#### Información Técnica")
-                sql_query = gr.Textbox(
-                    lines=5,
-                    interactive=False,
-                    label="",
-                    placeholder="Aquí verás la consulta SQL generada."
-                )
+        gr.Markdown("### Resultados")
+        with gr.Row():
+            response = gr.Textbox(
+                lines=8,
+                interactive=False,
+                label="Respuesta"
+            )
+            sql_query = gr.Textbox(
+                lines=8,
+                interactive=False,
+                label="Consulta SQL generada",
+                placeholder="Aquí verás la consulta SQL generada."
+            )
 
         submit_btn.click(
             fn=process_query,
-            inputs=[db_mode, upload_db_file, context_prompt, model_choice, question, selected_db_path],
+            inputs=[db_mode, upload_db_file, context_prompt, model_choice, question],
             outputs=[sql_query, response]
         )
 
