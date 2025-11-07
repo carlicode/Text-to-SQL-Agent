@@ -143,6 +143,7 @@ async def process_with_bedrock_converse(bedrock_client, model_id: str, question:
     
     max_iterations = 5
     iteration = 0
+    tool_history = []
     
     while iteration < max_iterations:
         iteration += 1
@@ -181,7 +182,11 @@ async def process_with_bedrock_converse(bedrock_client, model_id: str, question:
             
             # Si hay texto y no hay tool uses, es la respuesta final
             if text_parts and not tool_uses:
-                return ''.join(text_parts)
+                return {
+                    "final_response": ''.join(text_parts),
+                    "tool_history": tool_history,
+                    "error": False
+                }
             
             # Si hay tool uses, ejecutarlas y continuar el ciclo
             if tool_uses:
@@ -191,6 +196,11 @@ async def process_with_bedrock_converse(bedrock_client, model_id: str, question:
                     tool_id = tool_use.get('toolUseId')
                     tool_name = tool_use.get('name')
                     tool_input = tool_use.get('input', {})
+
+                    tool_history.append({
+                        "name": tool_name,
+                        "arguments": tool_input
+                    })
                     
                     # Ejecutar herramienta con MCP
                     tool_result_text = await execute_tool_with_mcp(
@@ -220,14 +230,26 @@ async def process_with_bedrock_converse(bedrock_client, model_id: str, question:
             else:
                 # Respuesta final sin herramientas
                 if text_parts:
-                    return ''.join(text_parts)
+                    return {
+                        "final_response": ''.join(text_parts),
+                        "tool_history": tool_history,
+                        "error": False
+                    }
                 break
                 
         except Exception as e:
-            return f"Error en conversación con Bedrock: {str(e)}"
+            return {
+                "final_response": f"Error en conversación con Bedrock: {str(e)}",
+                "tool_history": tool_history,
+                "error": True
+            }
     
     # Si llegamos aquí, se alcanzó el máximo de iteraciones
-    return "Se alcanzó el máximo de iteraciones. Intenta reformular tu pregunta."
+    return {
+        "final_response": "Se alcanzó el máximo de iteraciones. Intenta reformular tu pregunta.",
+        "tool_history": tool_history,
+        "error": True
+    }
 
 
 def process_query_with_mcp(question: str, model_name: str, db_path: str, 
@@ -259,13 +281,24 @@ def process_query_with_mcp(question: str, model_name: str, db_path: str,
                 model_id = get_bedrock_model_id(model_name)
                 
                 # Procesar con Bedrock Converse API y herramientas MCP
-                response = await process_with_bedrock_converse(
+                response_data = await process_with_bedrock_converse(
                     bedrock_client, model_id, question, mcp_client, tools
                 )
-                
+                final_response = response_data.get("final_response", "")
+                tool_history = response_data.get("tool_history", [])
+
+                sql_query = next(
+                    (
+                        tool_call.get("arguments", {}).get("query")
+                        for tool_call in reversed(tool_history)
+                        if tool_call.get("arguments") and tool_call["arguments"].get("query")
+                    ),
+                    "No se ejecutó ninguna consulta SQL."
+                )
+
                 return {
-                    "sql_query": "MCP Tools via Bedrock Converse",
-                    "response": response
+                    "sql_query": sql_query,
+                    "response": final_response
                 }
                 
         except Exception as e:
