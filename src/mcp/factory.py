@@ -37,8 +37,10 @@ class MCPServerFactory:
         
         db_path_abs = os.path.abspath(db_path)
         
+        python_executable = sys.executable or "python"
+
         return StdioServerParameters(
-            command="python",
+            command=python_executable,
             args=[mcp_server_path],
             env={
                 "MCP_DB_PATH": db_path_abs,
