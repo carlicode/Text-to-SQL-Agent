@@ -4,6 +4,8 @@
 
 Este proyecto contiene un agente conversacional que convierte preguntas en lenguaje natural en consultas SQL y las ejecuta usando modelos de IA de AWS Bedrock. La solución usa **MCP (Model Context Protocol)** directamente con **AWS Bedrock Converse API** para que el agente decida automáticamente qué herramientas necesita para responder.
 
+> **Producción:** la aplicación corre en AWS EC2 y está disponible en https://carlicode-projects.com/. Los despliegues se orquestan con GitHub Actions, incluyendo construcción de la imagen y reinicio automático del servicio en el servidor.
+
 ## 🎥 Video Demo
 
 [![Video Demo](https://img.youtube.com/vi/90KrpApa5R4/maxresdefault.jpg)](https://www.youtube.com/watch?v=90KrpApa5R4)
@@ -78,7 +80,7 @@ Aquí tienes cómo está organizado el código:
 
 - Python 3.10 o superior
 - Cuenta de AWS con acceso a Bedrock
-- Credenciales AWS (Access Key y Secret Key)
+- Un perfil AWS configurado (credenciales locales) **o** un IAM Role con permisos para Bedrock
 - Acceso a modelos de Bedrock (Claude 3 Sonnet, Claude 3 Haiku, o Llama 3 70B)
 
 ### Instalación
@@ -113,19 +115,7 @@ sqlite3 data/test_database.db < data/test_database.sql
 
 ### Configuración de AWS
 
-Para facilitar la reproducción del experimento, las credenciales AWS (Access Key y Secret Key) se entregaron por correo. **⚠️ Nota importante**: Usar credenciales directamente en la interfaz no es una buena práctica de seguridad y solo se hace aquí para simplificar la reproducción del experimento. En un entorno de producción, deberías usar:
-
-- Variables de entorno
-- Roles IAM con permisos mínimos
-- Secrets Manager de AWS
-- Credenciales temporales con AWS STS
-
-**Para este experimento, debes ingresar las credenciales manualmente en la interfaz de Gradio:**
-- Las credenciales se ingresan directamente en los campos de la interfaz de Gradio
-- **Las credenciales tienen una validez de 48 horas** desde el momento en que se entregaron
-- Las credenciales no se guardan permanentemente en la aplicación (solo se usan durante la sesión)
-
-> **💡 Por qué esta decisión**: Aunque no es la mejor práctica, ingresar credenciales en la UI permite reproducir el experimento de forma rápida sin configurar variables de entorno, lo cual es útil para demos y pruebas. Sin embargo, en producción siempre debes usar métodos más seguros.
+En ambiente local puedes usar tus credenciales habituales (variables de entorno, `~/.aws/credentials`, etc.). En producción la instancia EC2 está asociada al rol `EC2BedrockRole`, por lo que boto3 obtiene credenciales automáticamente sin exponer Access Keys. Asegúrate de que el role (o el usuario local) tenga permisos para invocar Bedrock (por ejemplo `AmazonBedrockFullAccess`).
 
 ## Uso
 
@@ -143,20 +133,14 @@ Esto abrirá una interfaz web de Gradio en tu navegador (por defecto en `http://
    - Selecciona "Usar base de datos de prueba" para usar la base de datos de ejemplo
    - O "Cargar base de datos nueva" para usar tu propia base SQLite
 
-2. **Configura el contexto** (opcional):
-   - Modifica el prompt de contexto si quieres cambiar la información general sobre la empresa
-   - Por defecto incluye información sobre TechNova (empresa de productos electrónicos)
+2. **Contexto**:
+   - El contexto por defecto describe a TechNova; puedes ajustarlo según tu dominio
 
 3. **Selecciona el modelo**:
    - Elige entre Claude 3 Sonnet, Claude 3 Haiku, o Llama 3 70B
    - Recomendado: Claude 3 Haiku para velocidad, Claude 3 Sonnet para mejores resultados
 
-4. **Ingresa tus credenciales AWS**:
-   - Access Key y Secret Access Key (las recibiste por correo)
-   - ⚠️ **Nota de seguridad**: Estas credenciales tienen una validez de 48 horas y solo se usan durante la sesión (no se guardan). En producción usarías métodos más seguros como variables de entorno o roles IAM.
-   - Asegúrate de tener permisos para usar Bedrock
-
-5. **Haz una pregunta**:
+4. **Haz una pregunta**:
    - Escribe tu pregunta en lenguaje natural
    - El agente decidirá automáticamente si usar contexto o consultar la base de datos
 
@@ -222,9 +206,8 @@ El agente funciona así:
 ## Solución de problemas
 
 ### Error de credenciales AWS
-- Revisa que hayas copiado bien las credenciales (a veces hay espacios extras)
-- Verifica que las credenciales sigan siendo válidas
-- Asegúrate de haber ingresado ambas: Access Key y Secret Key
+- Verifica que tu entorno local tenga credenciales configuradas (variables de entorno, perfil AWS, etc.) o que la instancia EC2 tenga el rol correcto
+- Asegúrate de tener permisos para usar Bedrock
 
 ### AccessDeniedException
 - Esto significa que las credenciales no tienen permisos para usar Bedrock. Verifica los permisos en AWS.
