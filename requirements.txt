@@ -1,0 +1,8 @@
+# Interfaz web
+gradio>=4.0.0
+
+# MCP (Model Context Protocol) - Biblioteca oficial de Python
+mcp>=1.0.0
+
+# AWS Bedrock
+boto3>=1.34.0
