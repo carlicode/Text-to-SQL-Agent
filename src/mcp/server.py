@@ -1,6 +1,15 @@
 from mcp.server.fastmcp import FastMCP
-from src.database import get_database_connection, get_database_schema, format_schema
 import os
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path when launched as a standalone script
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+project_root_str = str(PROJECT_ROOT)
+if project_root_str not in sys.path:
+    sys.path.insert(0, project_root_str)
+
+from src.database import get_database_connection, get_database_schema, format_schema
 
 # Estado del servidor (db_path y context se pasan como variables de entorno o argumentos)
 mcp = FastMCP("Text-to-SQL-Agent")
